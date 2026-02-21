@@ -15,7 +15,9 @@ pip install opencv-python numpy Pillow
 
 Run the script from the command line, providing the path to your configuration file as an argument:
 
+```bash
 py timelapse.py config.cfg
+```
 
 # Configuration File Format
 
@@ -45,7 +47,7 @@ The script reads parameters from a plain text file using a `key=value` structure
 * **`cy`** = the crop size in height
 
 ### Watermarks
-* **logo[Name_or_number];x_of_watermark;y_of_watermark** = Path to the watermark image and its coordinates, formatted as path;x;y. You can add multiple watermarks by using different keys starting with logo (e.g., logo1, logo2, logomain). Supports PNGs with transparency, GIF files or JPGs images.
+* **`logo[Name_or_number];x_of_watermark;y_of_watermark`** = Path to the watermark image and its coordinates, formatted as path;x;y. You can add multiple watermarks by using different keys starting with logo (e.g., logo1, logo2, logomain). Supports PNGs with transparency, GIF files or JPGs images.
 
 Example: logo1=logo/watermark.png;100;100
 
