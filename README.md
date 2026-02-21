@@ -66,18 +66,34 @@ if want_ftp_load or want_ftp_write, parameters ftp_server, ftp_user, ftp_passwor
 ## Example `config.txt`
 
 folder=kts2
+
 prefix=raw_
+
 hours=1
+
 duration=100
+
 output=vystup<h>.mp4
+
 want_FTP_load=TRUE
+
 width=1600
+
 height=1000
+
 ftp_server=ftp_server_here
+
 ftp_user="ftp_user_here"
+
 ftp_password="ftp_password_here"
+
 want_ftp_write=true
+
 want_directory_clean=true
+
 logo1=logo/logo1.gif;100;100
+
 logo2=logo/logo2.png;100;2000
+
 logo3=logo/logo3.jpg;1000;1000
+
