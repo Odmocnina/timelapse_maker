@@ -9,6 +9,7 @@ The script requires Python 3 and the following dependencies. You can install the
 
 ```bash
 pip install opencv-python numpy Pillow
+```
 
 # Usage
 
