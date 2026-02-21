@@ -7,8 +7,10 @@ import sys
 import ftp_handeler as ftp
 from PIL import Image
 import io
+import logging
 
 NOT_FOUND_PARAMETER = -1
+logger = None
 
 """
     Helper function to safely read watermark image using Pillow (supports GIF and broken PNGs).
@@ -23,7 +25,7 @@ def read_watermark_safe(path):
         numpy_rgba = np.array(pil_img)
         return cv2.cvtColor(numpy_rgba, cv2.COLOR_RGBA2BGRA)
     except Exception as e:
-        print(f"Warning: Could not load watermark image '{path}': {e}")
+        logger.warning(f"Could not load watermark image '{path}': {e}")
         return None
 
 """
@@ -48,13 +50,23 @@ def get_watermarks(config):
                     
                     # add logo item to watermarks list if coordinates are valid
                     watermarks.append({'path': logo_path, 'x': logo_x, 'y': logo_y})
-                    print(f"Found watermark '{key}': {logo_path}, Position: x={logo_x}, y={logo_y}")
+                    logger.info(f"Found watermark '{key}': {logo_path}, Position: x={logo_x}, y={logo_y}")
                 except ValueError: # if something is fucked up with coordinates, skip this logo item
-                    print(f"Warning: Invalid coordinates in '{key}' ('{value}'). Skipping this watermark.")
+                    logger.warning(f"Warning: Invalid coordinates in '{key}' ('{value}'). Skipping this watermark.")
             else:
-                print(f"Warning: Invalid format for '{key}' ('{value}'). Expected 'path;x;y'. Skipping.")
+                logger.warning(f"Warning: Invalid format for '{key}' ('{value}'). Expected 'path;x;y'. Skipping.")
                 
     return watermarks
+
+"""
+    Function for setting up the outfile, if the output filename in config ends with <h>, it will be replaced with a timestamp, otherwise it will be used as is.
+    param: config - dictionary of parameters, expected key:
+        - output (str): Output video filename (e.g., "timelapse.mp4" or "timelapse_<h>.mp4")
+    return: config with updated 'output' key containing the final output filename
+"""
+def set_up_outfile(config):
+    config['output'] = get_output_filename(config['output'])
+    return config
 
 """
     Function to apply all watermarks from the list to the base image.
@@ -142,7 +154,7 @@ def decide_to_crop_image(config):
         x = int(config['x'])
         cx = int(config['cx'])
     except KeyError as e:
-        print("Invalid or missing x/cx in config, images will not be cropped on width")
+        logger.info("Invalid or missing x/cx in config, images will not be cropped on width")
         will_be_cropped_width = False
 
     will_be_cropped_height = True
@@ -152,14 +164,14 @@ def decide_to_crop_image(config):
         y = int(config['y'])
         cy = int(config['cy'])
     except KeyError as e:
-        print("Invalid or missing y/cy in config, images will not be cropped on height")
+        logger.info("Invalid or missing y/cy in config, images will not be cropped on height")
         will_be_cropped_height = False
 
     if will_be_cropped_width:
-        print("Images will be cropped on width. x: " + str(x) + ", cx: " + str(cx))
+        logger.info("Images will be cropped on width. x: " + str(x) + ", cx: " + str(cx))
 
     if will_be_cropped_height:
-        print("Images will be cropped on height. y: " + str(y) + ", cy: " + str(cy))
+        logger.info("Images will be cropped on height. y: " + str(y) + ", cy: " + str(cy))
 
     return will_be_cropped_width, will_be_cropped_height, x, cx, y, cy
 
@@ -223,16 +235,16 @@ def crop_image_height(image, y, cy):
 """
 def clean_directory(config):
     if str(config.get('want_directory_clean', 'false')).lower() != 'true': # control if cleanup is enabled
-        print("Directory cleanup is disabled in config. Skipping cleanup.")
+        logger.info("Directory cleanup is disabled in config. Skipping cleanup.")
         return
 
-    print("--- Starting Directory Cleanup ---")
+    logger.info("--- Starting Directory Cleanup ---")
     try: # check for mandatory parameters
         image_folder = config['folder']
         hours_back = float(config['hours'])
         file_prefix = config['prefix']
     except KeyError as e:
-        print(f"Cleanup Error: Missing parameter {e}")
+        logger.warning(f"Cleanup Error: Missing parameter {e}")
         return
 
     # calculate the timestamp threshold for deletion
@@ -251,9 +263,9 @@ def clean_directory(config):
                     os.remove(file_path)
                     deleted_count += 1
                 except OSError as e:
-                    print(f"Warning: Failed to delete {file_path}: {e}")
+                    logger.warning(f"Warning: Failed to delete {file_path}: {e}")
 
-    print(f"Cleanup finished. Deleted {deleted_count} old images.")
+    logger.info(f"Cleanup finished. Deleted {deleted_count} old images.")
 
 """
     Loads configuration from a file. Expects key=value format.
@@ -293,7 +305,7 @@ def read_image_safe(file_path):
             numpy_array = np.asarray(file_bytes, dtype=np.uint8)
             return cv2.imdecode(numpy_array, cv2.IMREAD_COLOR)
     except Exception as e:
-        print(f"Error reading file stream: {e}")
+        logger.warning(f"Error reading file stream: {e}")
         return None
     
 """"
@@ -315,9 +327,10 @@ def get_output_filename(output_filename):
         # reconstruct the output filename with the new name and original extension
         output_filename = new_name + ext
         
-        print(f"Output filename dynamically set to: {output_filename}")
+        logger.info(f"Output filename dynamically set to: {output_filename}")
         return output_filename
     else:
+        logger.info(f"Output filename set to: {output_filename}")
         return output_filename
 
 """
@@ -339,7 +352,7 @@ def create_timelapse(config):
         frame_duration = float(config['duration'])
         output_filename = get_output_filename(config['output'])
     except KeyError as e:
-        print(f"Error: Missing parameter: {e}")
+        logger.error(f"Error: Missing mandatory parameter: {e}")
         return
 
     target_width = int(config.get('width')) if config.get('width') else None
@@ -348,7 +361,7 @@ def create_timelapse(config):
     # get all files with prefix and within time range (in memory only string, not images)
     time_threshold = datetime.datetime.now() - datetime.timedelta(hours=hours_back)
 
-    print(f"Scanning {image_folder}...")
+    logger.info(f"Scanning {image_folder} for images with prefix '{file_prefix}' from the last {hours_back} hours.")
     all_files = []
     for filename in os.listdir(image_folder):
         if filename.startswith(file_prefix) and filename.lower().endswith(('.png', '.jpg', '.jpeg')):
@@ -358,7 +371,7 @@ def create_timelapse(config):
                 all_files.append((path, mtime))
 
     if not all_files:
-        print("No images found.")
+        logger.warning("No images found for the specified time range. No video will be created.")
         return
 
     # sort by modification time (oldest first)
@@ -384,7 +397,7 @@ def create_timelapse(config):
             target_height = target_height or h # give to target height what was in config or what was in first image
             fourcc = cv2.VideoWriter_fourcc(*'mp4v') # use mp4v codec for .mp4 output
             video_writer = cv2.VideoWriter(output_filename, fourcc, fps, (target_width, target_height))
-            print(f"Video started: {target_width}x{target_height} @ {fps} FPS")
+            logger.info(f"Video started: {target_width}x{target_height} @ {fps} FPS")
 
         # crop image if wanted
         if crop_width:
@@ -403,13 +416,129 @@ def create_timelapse(config):
 
         count += 1
         if count % 10 == 0: # print progress every 10 frames
-            print(f"Processing frame {count}/{len(all_files)}...", end='\r')
+            logger.debug(f"Processed {count} frames so far.")
 
     if video_writer:
         video_writer.release()
-        print(f"\nDone! Processed {count} images.")
+        logger.info(f"Timelapse video created: {output_filename} with {count} frames.")
     else:
-        print("\nNo video was created.")
+        logger.warning("No video was created because no valid images were found.")
+
+"""
+    Function to set up logging based on configuration. If 'log_to_file' is set to true in config, logs will be written to 'app.log' with UTF-8 encoding.
+    Logs will also be printed to console and file if wanted. The log format includes timestamp, log level, and message.
+    param: config - dictionary of parameters, expected key:
+        - log_to_file (str): "true" to enable logging to file, otherwise "false"
+    return: configured logger instance
+"""
+def set_up_logging(config, config_file_name):
+    # create logger
+    logger = logging.getLogger("logger")
+    logger.setLevel(logging.DEBUG)  # catch all levels of logs (DEBUG and above)
+
+    # create formatter with timestamp, log level and message, the date format is set to be more readable
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', 
+                                datefmt='[%Y-%m-%d %H:%M:%S]')
+
+    if str(config.get('log_to_file', 'false')).lower() == 'true':
+        # make file handler for logging to a file, set encoding to utf-8 to handle special characters in log messages, and set the formatter
+        log_file = "app.log"  # default log file name
+        try:
+            if config["log_file"]: # if log file is specified in config, use it, otherwise use default 'app.log'
+                log_file = config["log_file"]
+        except KeyError:
+            logger.info("Log file not specified in config, will try to use default 'app.log' or log file with timestamp if log_dir is specified.")
+        
+        if log_file == "app.log": # if default log file is used, check if log_dir is specified in config, if so, create a log file with timestamp in that directory
+            try:
+                if config["log_dir"]:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+                    log_file = os.path.join(config["log_dir"], f"{os.path.splitext(os.path.basename(config_file_name))[0]}_{timestamp}.log")
+            except KeyError:
+                logger.info("Log directory not specified in config, will use default log file name or log file specified in config if it exists.")  
+
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+
+    # make console handler for logging to console, and set the same formatter so logs look the same in file and console
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(console_handler)
+
+    return logger
+
+"""
+    Funtion that gets log file name like logs/config2_2026-02-21-21-58-46.log and returns the timestamp part as datetime object, in this case 2026-02-21 21:58:46
+    param: log_file - the path to the log file
+    return: datetime object representing the timestamp extracted from the log file name, or None if it cannot be extracted
+"""
+def get_time_of_log_file(log_file):
+    try:
+        base_name = os.path.basename(log_file) # get just the file name without directories
+        name_part = os.path.splitext(base_name)[0] # remove the extension to get the name part
+        timestamp_str = name_part.split('_')[-1] # get the last part after underscore, which should be the timestamp
+        return datetime.datetime.strptime(timestamp_str, "%Y-%m-%d-%H-%M-%S") # parse the timestamp string into a datetime object
+    except Exception as e:
+        logger.warning(f"Could not extract timestamp from log file name '{log_file}': {e}")
+        return None
+    
+
+"""
+    Function for cleaning up old logs from the specified log directory based on the configuration.
+    param: config - dictionary of parameters, expected keys:
+        - clear_log_dir (str): "true" if log cleanup is enabled, otherwise "false"
+        - log_dir (str): Directory where log files are stored
+        - log_clean_days (int): Age in days; log files older than this will be deleted
+"""
+def clear_log_dir(config):
+    if str(config.get('clear_log_dir', 'false')).lower() != 'true':
+        logger.info("Log directory cleanup not enabled in config.")
+        return
+    
+    logger.info("--- Starting Log Directory Cleanup ---")
+
+    log_dir = config.get('log_dir')
+    if not log_dir:
+        logger.warning("Log directory not specified in config, cannot perform cleanup.")
+        return
+
+    if not os.path.exists(log_dir):
+        logger.info(f"Log directory '{log_dir}' does not exist, no logs to clean.")
+        return
+    
+    try:
+        days_back = int(config.get('log_clean_days', NOT_FOUND_PARAMETER))
+    except ValueError:
+        logger.warning(f"Invalid log clean days specified in config ({config.get('log_clean_days', NOT_FOUND_PARAMETER)}), cannot perform cleanup.")
+        return
+    
+    if days_back == NOT_FOUND_PARAMETER:
+        logger.warning("Log clean days not specified in config, cannot perform cleanup.")
+        return
+    
+    if days_back < 0:
+        logger.warning(f"Log clean days cannot be negative ({days_back}), cannot perform cleanup.")
+        return
+    
+    time_threshold = datetime.datetime.now() - datetime.timedelta(days=days_back)
+
+    deleted_count = 0
+    for filename in os.listdir(log_dir):
+        file_path = os.path.join(log_dir, filename)
+        try:
+            if os.path.isfile(file_path):
+                file_time_from_name = get_time_of_log_file(file_path)
+                if file_time_from_name < time_threshold:
+                    os.remove(file_path)
+                    deleted_count += 1
+                    logger.info(f"Deleted log file: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to delete log file '{file_path}': {e}")
+
+    logger.info(f"Log directory cleanup finished. Deleted {deleted_count} log files.")
 
 
 if __name__ == "__main__":
@@ -417,10 +546,16 @@ if __name__ == "__main__":
     parser.add_argument("config_file", help="Path to the configuration file (e.g., config.txt)")
     args = parser.parse_args()
     config_data = load_config(args.config_file)
+    logger = set_up_logging(config_data, args.config_file)
+    config_data = set_up_outfile(config_data)
 
-    ftp.download_new_from_ftp(config_data)
+    # download new stuff (if enebled in config) and create vid
+    ftp.download_new_from_ftp(config_data, logger)
     create_timelapse(config_data)
 
-    ftp.upload_video_to_ftp(config_data)
+    # upload video to FTP if enabled in config
+    ftp.upload_video_to_ftp(config_data, logger)
 
+    # clean image and log directories if enabled in config
     clean_directory(config_data)
+    clear_log_dir(config_data)

@@ -62,8 +62,20 @@ Example: logo1=logo/watermark.png;100;100
 
 if want_ftp_load or want_ftp_write, parameters ftp_server, ftp_user, ftp_password are necessery, if they are missing, these functions will not happen.
 
-### Directory Cleanup
+### logging
+* **`log_to_file`** = Set to true to enable logging to a file.
+* **`log_file`** = Path to the log file. If not specified, logs will be saved in the same directory as the script with a default name or a timestamped with config file name if log_to_file is enabled.
+* **`log_dir`** = Directory where log files will be stored. If not specified, logs will be saved in the same directory as the script with a config name (without extension) or a timestamped name if log_to_file is enabled.
+
+> **Note:** If `log_to_file` is set to true but `log_file` is not specified, the script will attempt to create a log file config_name + timestamp in the directory specified by `log_dir`. If `log_dir` is also not specified, it will fall back to using a default log file name (app.log) in the same directory as the script.
+
+### Directory cleanup (images)
 * **`want_directory_clean`** = Set to true to automatically delete images from the local folder that are older than the specified hours limit after the process is finished. If missing then taken as false.
+
+### Directory cleanup (logs)
+* **`clear_log_dir`** = Set to true to automatically delete log files from the log directory that are older than value of `log_clean_days` in days after the process is finished. If missing then taken as false.
+* **`log_dir`** = Directory where log files are stored. This parameter is required if `clear_log_dir` is set to true.
+* **`log_clean_days`** = Number of days to keep log files when `clear_log_dir` is set to true. Log files older than this number of days will be deleted. This parameter is required if `clear_log_dir` is set to true.
 
 ## Example `config.txt`
 
@@ -75,7 +87,7 @@ hours=1
 
 duration=100
 
-output=vystup<h>.mp4
+output=output.mp4
 
 want_FTP_load=TRUE
 
@@ -98,4 +110,8 @@ logo1=logo/logo1.gif;100;100
 logo2=logo/logo2.png;100;2000
 
 logo3=logo/logo3.jpg;1000;1000
+
+log_to_file=true
+
+log_dir=logs
 

@@ -13,13 +13,13 @@ import ftplib
         - folder (str): Local folder to save downloaded images
         - prefix (str): Prefix of image files to consider
 """
-def download_new_from_ftp(config):
+def download_new_from_ftp(config, logger):
     # control if FTP download is enabled, if not, skip the whole function
     if str(config.get('want_ftp_load', 'false')).lower() != 'true':
-        print("FTP Download not on, no images will be downloaded from FTP.")
+        logger.info("FTP Download not on, no images will be downloaded from FTP.")
         return
 
-    print("--- Starting FTP Download ---")
+    logger.info("--- Starting FTP Download ---")
     try:  # check of mandatory parameters, if any is missing, print error and skip the whole function, because we cannot
         ftp_server = config['ftp_server']           #  continue without them
         ftp_user = config['ftp_user']
@@ -27,7 +27,7 @@ def download_new_from_ftp(config):
         image_folder = config['folder']
         file_prefix = config['prefix']
     except KeyError as e:
-        print(f"FTP Download Error: Missing mandatory parameter {e}")
+        logger.warning(f"FTP Download Error: Missing mandatory parameter {e}")
         return
 
     # find the newest local image time to avoid downloading files we already have
@@ -63,12 +63,13 @@ def download_new_from_ftp(config):
                             with open(local_path, 'wb') as f:
                                 ftp.retrbinary(f"RETR {filename}", f.write)
                             downloaded_count += 1
+                            logger.info(f"Downloaded: {filename}")
                     except Exception as e:
-                        print(f"Warning: Could not check/download {filename}: {e}")
+                        logger.warning(f"Warning: Could not check/download {filename}: {e}")
 
-            print(f"FTP Download finished. Got {downloaded_count} new images.")
+            logger.info(f"FTP Download finished. Got {downloaded_count} new images.")
     except Exception as e:
-        print(f"FTP Connection failed: {e}")
+        logger.warning(f"FTP Connection failed: {e}")
 
 
 """
@@ -80,24 +81,24 @@ def download_new_from_ftp(config):
         - ftp_password (str): FTP password
         - output (str): Path to the video file to upload
 """
-def upload_video_to_ftp(config):
+def upload_video_to_ftp(config, logger):
     # control if FTP upload is enabled, if not, skip the whole function
     if str(config.get('want_ftp_write', 'false')).lower() != 'true':
-        print("Writing into FTP not on, mp4 file will not be written into FTP.")
+        logger.info("Writing into FTP not on, mp4 file will not be written into FTP.")
         return
 
-    print("--- Starting FTP Upload ---")
+    logger.info("--- Starting FTP Upload ---")
     try:
         ftp_server = config['ftp_server']
         ftp_user = config['ftp_user']
         ftp_password = config['ftp_password']
         output_filename = config['output']
     except KeyError as e:
-        print(f"FTP Upload Error: Missing parameter {e}")
+        logger.warning(f"FTP Upload Error: Missing parameter {e}")
         return
 
     if not os.path.exists(output_filename):
-        print(f"Error: Output video {output_filename} not found for upload.")
+        logger.warning(f"Error: Output video {output_filename} not found for upload.")
         return
 
     try: # try to connect to FTP and upload the video file
@@ -105,6 +106,6 @@ def upload_video_to_ftp(config):
             with open(output_filename, 'rb') as f:
                 # load file in binary mode and upload it using STOR command, the file will be stored with the same name
                 ftp.storbinary(f"STOR {os.path.basename(output_filename)}", f) #  as the local file
-        print("Success: Video uploaded to FTP.")
+        logger.info("Success: Video uploaded to FTP.")
     except Exception as e:
-        print(f"FTP Upload failed: {e}")
+        logger.warning(f"FTP Upload failed: {e}")
