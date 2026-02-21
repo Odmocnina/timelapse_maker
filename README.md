@@ -3,7 +3,7 @@
 A Python script that generates a timelapse video from a directory of images based on parameters defined in a configuration file. It filters input images by filename prefix and modification time. 
 It is also capable of connecting through FTP (to download new images and upload the final video), applying multiple watermarks with transparency, cropping images, and cleaning up old files to save disk space.
 
-## Requirements
+# Requirements
 
 The script requires Python 3 and the following dependencies. You can install them using:
 
