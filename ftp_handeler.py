@@ -2,7 +2,6 @@ import os
 import datetime
 import ftplib
 
-
 """
     Function for downloading new images from FTP, uploading the created video to FTP and cleaning up old images from the 
     directory.
@@ -16,7 +15,8 @@ import ftplib
 """
 def download_new_from_ftp(config):
     # control if FTP download is enabled, if not, skip the whole function
-    if str(config.get('wantFTPLoad', 'false')).lower() != 'true':
+    if str(config.get('want_ftp_load', 'false')).lower() != 'true':
+        print("FTP Download not on, no images will be downloaded from FTP.")
         return
 
     print("--- Starting FTP Download ---")
@@ -48,10 +48,14 @@ def download_new_from_ftp(config):
             for filename in files:
                 if filename.startswith(file_prefix) and filename.lower().endswith(('.png', '.jpg', '.jpeg')):
                     try:
-                        # get the modification time of the file on FTP using MDTM command (returns time in format YYYYMMDDHHMMSS)
+
                         mdtm_resp = ftp.voidcmd(f"MDTM {filename}")
                         ftp_time_str = mdtm_resp[4:].strip()
-                        ftp_time = datetime.datetime.strptime(ftp_time_str, "%Y%m%d%H%M%S").timestamp()
+
+                        # get time of the file
+                        ftp_dt = datetime.datetime.strptime(ftp_time_str, "%Y%m%d%H%M%S")
+                        ftp_dt = ftp_dt.replace(tzinfo=datetime.timezone.utc)  # time in UTC
+                        ftp_time = ftp_dt.timestamp()  #get real time in milisecs from 1970 something
 
                         # if the FTP file is newer than the newest local file, download it
                         if ftp_time > newest_local_time:
@@ -78,7 +82,8 @@ def download_new_from_ftp(config):
 """
 def upload_video_to_ftp(config):
     # control if FTP upload is enabled, if not, skip the whole function
-    if str(config.get('wantFTPwrite', 'false')).lower() != 'true':
+    if str(config.get('want_ftp_write', 'false')).lower() != 'true':
+        print("Writing into FTP not on, mp4 file will not be written into FTP.")
         return
 
     print("--- Starting FTP Upload ---")
