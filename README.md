@@ -5,6 +5,8 @@ It is also capable of connecting through FTP (to download new images and upload 
 
 Image editing is dane in order: crop, adding watermarks, resizing.
 
+@Author: Michael Hladky, Sumavanet.cz
+
 # Requirements
 
 The script requires Python 3 and the following dependencies. You can install them using:
