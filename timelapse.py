@@ -62,10 +62,32 @@ def get_watermarks(config):
     Function for setting up the outfile, if the output filename in config ends with <h>, it will be replaced with a timestamp, otherwise it will be used as is.
     param: config - dictionary of parameters, expected key:
         - output (str): Output video filename (e.g., "timelapse.mp4" or "timelapse_<h>.mp4")
+        - video_folder (str, optional): Directory to save the video, if not specified, video will be saved in current directory
     return: config with updated 'output' key containing the final output filename
 """
 def set_up_outfile(config):
-    config['output'] = get_output_filename(config['output'])
+    video_folder = None
+    try:
+        video_folder = config['video_folder']
+    except KeyError as e:
+        logger.warning(f"Output folder not set in config. Video will be saved to photo directory. Missing parameter: {e}")
+
+    if video_folder is not None:
+        if not os.path.exists(video_folder):
+            try:
+                os.makedirs(video_folder)
+                logger.info(f"Created video output directory: {video_folder}")
+            except OSError as e:
+                logger.warning(f"Could not create video output directory '{video_folder}': {e}. Video will be saved in current directory.")
+                video_folder = None
+
+    if video_folder is None:
+        logger.info("No video output directory specified or could not be created. Video will be saved to photo directory.")
+        config["video_folder"] = config["folder"] # if no video folder is specified, use the photo folder for output
+        video_folder = config["folder"]
+    
+    config['output'] = os.path.join(video_folder, get_output_filename(config['output']))
+
     return config
 
 """
@@ -137,6 +159,47 @@ def apply_watermark(base_img, watermark_img, x, y):
     return base_img
 
 """
+    Function to remove old videos from the specified directory based on the configuration. Videos that start with the specified prefix and are older than the specified number of hours will be deleted.
+    param: config - dictionary of parameters, expected keys:
+        - want_video_clean (str): "true" if video cleanup is enabled, otherwise "false"
+        - video_folder (str): Directory where videos are stored
+        - video_prefix (str): Prefix of video files to consider for deletion
+        - directory_clean_mp4_days (float): Age in days; video files older than this will be deleted
+"""
+def clear_video_dir(config):
+    if str(config.get('want_video_clean', 'false')).lower() != 'true':
+        logger.info("Video cleanup is disabled in config. Skipping cleanup.")
+        return
+
+    logger.info("--- Starting Video Cleanup ---")
+    try:
+        video_folder = config['video_folder']
+        hours_back = float(config['directory_clean_mp4_days'])
+        file_prefix = config['video_prefix']
+    except KeyError as e:
+        logger.warning(f"Cleanup Error: Missing parameter {e}")
+        return
+
+    time_threshold = datetime.datetime.now() - datetime.timedelta(days=hours_back)
+    threshold_timestamp = time_threshold.timestamp()
+    deleted_count = 0
+
+    if not os.path.exists(video_folder):
+        return
+
+    for filename in os.listdir(video_folder):
+        if filename.startswith(file_prefix) and filename.lower().endswith(('.mp4', '.avi', '.mov')):
+            file_path = os.path.join(video_folder, filename)
+            if os.path.getmtime(file_path) < threshold_timestamp:
+                try:
+                    os.remove(file_path)
+                    deleted_count += 1
+                except OSError as e:
+                    logger.warning(f"Warning: Failed to delete {file_path}: {e}")
+
+    logger.info(f"Video cleanup finished. Deleted {deleted_count} old videos.")
+
+"""
     Function for reading config bullshit for reading cropping things
     param: config - read config (hashmap)
     return: will_be_cropped_width - boolean if cropping will be done on width
@@ -151,21 +214,45 @@ def decide_to_crop_image(config):
     x = NOT_FOUND_PARAMETER
     cx = NOT_FOUND_PARAMETER
     try: # check for x, cx parameters
-        x = int(config['x'])
-        cx = int(config['cx'])
+        x = config['x']
+        cx = config['cx']
     except KeyError as e:
-        logger.info("Invalid or missing x/cx in config, images will not be cropped on width")
+        logger.info("Missing x/cx in config, images will not be cropped on width")
         will_be_cropped_width = False
 
     will_be_cropped_height = True
     y = NOT_FOUND_PARAMETER
     cy = NOT_FOUND_PARAMETER
     try:  # check for x, cx parameters
-        y = int(config['y'])
-        cy = int(config['cy'])
+        y = config['y']
+        cy = config['cy']
     except KeyError as e:
-        logger.info("Invalid or missing y/cy in config, images will not be cropped on height")
+        logger.info("Missing y/cy in config, images will not be cropped on height")
         will_be_cropped_height = False
+
+    if will_be_cropped_width:
+        try:
+            x = int(x)
+            cx = int(cx)
+
+            if x < 0 or cx <= 0:
+                logger.warning(f"Invalid x/cx values in config (x: {x}, cx: {cx}), needs to be positive integer, images will not be cropped on width")
+                will_be_cropped_width = False
+        except ValueError:
+            logger.warning(f"Invalid x/cx values in config (x: {x}, cx: {cx}), needs to be integer, images will not be cropped on width")
+            will_be_cropped_width = False
+
+    if will_be_cropped_height:
+        try:
+            y = int(y)
+            cy = int(cy)
+
+            if y < 0 or cy <= 0:
+                logger.warning(f"Invalid y/cy values in config (y: {y}, cy: {cy}), needs to be positive integer, images will not be cropped on height")
+                will_be_cropped_height = False
+        except ValueError:
+            logger.warning(f"Invalid y/cy values in config (y: {y}, cy: {cy}), needs to be integer, images will not be cropped on height")
+            will_be_cropped_height = False
 
     if will_be_cropped_width:
         logger.info("Images will be cropped on width. x: " + str(x) + ", cx: " + str(cx))
@@ -559,3 +646,4 @@ if __name__ == "__main__":
     # clean image and log directories if enabled in config
     clean_directory(config_data)
     clear_log_dir(config_data)
+    clear_video_dir(config_data)

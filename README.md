@@ -31,7 +31,7 @@ The script reads parameters from a plain text file using a `key=value` structure
 * **`prefix`** = The filename prefix of the images to be processed (e.g., `img_`).
 * **`hours`** = How many hours back from the current time to include images (e.g., `24`).
 * **`duration`** = Frame duration in **milliseconds** (e.g., `100` results in 10 FPS).
-* **`output`** = The desired output filename for the video (e.g., `output.mp4`). Dynamic Naming: If the filename ends with <h> right before the extension (e.g., video<h>.mp4), the script will replace <h> with a current timestamp (e.g., video_2026-02-21-18-05-40.mp4).
+* **`output`** = The desired output filename for the video (e.g., `output.mp4`). Dynamic Naming: If the filename ends with <h> right before the extension (e.g., video<h>.mp4), the script will replace <h> with a current timestamp (e.g., video_2026-02-21-18-05-40.mp4). If prameter video_folder is set, the video will be saved in that folder, otherwise in the same directory as the script.
 
 ## Optional Parameters
 
@@ -76,6 +76,12 @@ if want_ftp_load or want_ftp_write, parameters ftp_server, ftp_user, ftp_passwor
 * **`clear_log_dir`** = Set to true to automatically delete log files from the log directory that are older than value of `log_clean_days` in days after the process is finished. If missing then taken as false.
 * **`log_dir`** = Directory where log files are stored. This parameter is required if `clear_log_dir` is set to true.
 * **`log_clean_days`** = Number of days to keep log files when `clear_log_dir` is set to true. Log files older than this number of days will be deleted. This parameter is required if `clear_log_dir` is set to true.
+
+### Directory cleanup (videos)
+* **`want_video_clean`** = Set to true to automatically delete video files from the output folder that are older than the specified days limit after the process is finished. If missing then taken as false.
+* **`video_folder`** = Directory where video files are stored. This parameter is required if `want_video_clean` is set to true.
+* **`video_prefix`** = Prefix of video files to consider for deletion when `want_video_clean` is set to true. This parameter is required if `want_video_clean` is set to true.
+* **`directory_clean_mp4_days`** = Number of days to keep video files when `want_video_clean` is set to true. Video files older than this number of days will be deleted. This parameter is required if `want_video_clean` is set to true.
 
 ## Example `config.txt`
 
