@@ -59,18 +59,18 @@ def get_watermarks(config):
     return watermarks
 
 """
-    Function for setting up the outfile, if the output filename in config ends with <h>, it will be replaced with a timestamp, otherwise it will be used as is.
+    Function for setting up the outfile, if the video_name in config ends with <h>, it will be replaced with a timestamp, otherwise it will be used as is.
     param: config - dictionary of parameters, expected key:
-        - output (str): Output video filename (e.g., "timelapse.mp4" or "timelapse_<h>.mp4")
+        - video_name (str): output video filename (e.g., "timelapse.mp4" or "timelapse_<h>.mp4")
         - video_folder (str, optional): Directory to save the video, if not specified, video will be saved in current directory
-    return: config with updated 'output' key containing the final output filename
+    return: config with updated 'video_name' key containing the final video filename
 """
 def set_up_outfile(config):
     video_folder = None
     try:
         video_folder = config['video_folder']
     except KeyError as e:
-        logger.warning(f"Output folder not set in config. Video will be saved to photo directory. Missing parameter: {e}")
+        logger.warning(f"Video folder not set in config. Video will be saved to photo directory. Missing parameter: {e}")
 
     if video_folder is not None:
         if not os.path.exists(video_folder):
@@ -86,7 +86,7 @@ def set_up_outfile(config):
         config["video_folder"] = config["folder"] # if no video folder is specified, use the photo folder for output
         video_folder = config["folder"]
     
-    config['output'] = os.path.join(video_folder, get_output_filename(config['output']))
+    config['video_name'] = os.path.join(video_folder, get_video_name_filename(config['video_name']))
 
     return config
 
@@ -175,7 +175,6 @@ def clear_video_dir(config):
     try:
         video_folder = config['video_folder']
         hours_back = float(config['directory_clean_mp4_days'])
-        file_prefix = config['video_prefix']
     except KeyError as e:
         logger.warning(f"Cleanup Error: Missing parameter {e}")
         return
@@ -188,7 +187,7 @@ def clear_video_dir(config):
         return
 
     for filename in os.listdir(video_folder):
-        if filename.startswith(file_prefix) and filename.lower().endswith(('.mp4', '.avi', '.mov')):
+        if filename.lower().endswith(('.mp4')):
             file_path = os.path.join(video_folder, filename)
             if os.path.getmtime(file_path) < threshold_timestamp:
                 try:
@@ -396,12 +395,12 @@ def read_image_safe(file_path):
         return None
     
 """"
-    Function to generate output filename based on config. If the filename ends with <h>, it will be replaced with a timestamp.
-    param: output_filename - the original output filename from config
-    return: the final output filename to use for the video
+    Function to generate video filename based on config. If the filename ends with <h>, it will be replaced with a timestamp.
+    param: video_name_filename - the original video filename from config
+    return: the final video_name filename to use for the video
 """
-def get_output_filename(output_filename):
-    name, ext = os.path.splitext(output_filename)
+def get_video_name_filename(video_name_filename):
+    name, ext = os.path.splitext(video_name_filename)
     
     # check if name ends with <h> to decide if we need to generate dynamic filename with timestamp
     if name.endswith('<h>'):
@@ -411,14 +410,14 @@ def get_output_filename(output_filename):
         # remove the <h> from the name and append the timestamp
         new_name = name[:-3] + "_" + timestamp
         
-        # reconstruct the output filename with the new name and original extension
-        output_filename = new_name + ext
+        # reconstruct the video_name filename with the new name and original extension
+        video_name_filename = new_name + ext
         
-        logger.info(f"Output filename dynamically set to: {output_filename}")
-        return output_filename
+        logger.info(f"Video filename dynamically set to: {video_name_filename}")
+        return video_name_filename
     else:
-        logger.info(f"Output filename set to: {output_filename}")
-        return output_filename
+        logger.info(f"Video filename set to: {video_name_filename}")
+        return video_name_filename
 
 """
     Function to create a timelapse video based on the provided configuration.
@@ -427,7 +426,7 @@ def get_output_filename(output_filename):
         - prefix (str): Prefix of image files to include
         - hours (float): Time range in hours to include images from
         - duration (float): Duration of each frame in milliseconds
-        - output (str): Output video filename (e.g., "timelapse.mp4")
+        - video_name (str): filename of output video (e.g., "timelapse.mp4")
         - width (int, optional): Target width of video frames (if not specified, uses original image width)
         - height (int, optional): Target height of video frames (if not specified, uses original image height)
 """
@@ -437,7 +436,7 @@ def create_timelapse(config):
         file_prefix = config['prefix']
         hours_back = float(config['hours'])
         frame_duration = float(config['duration'])
-        output_filename = get_output_filename(config['output'])
+        video_name_filename = get_video_name_filename(config['video_name'])
     except KeyError as e:
         logger.error(f"Error: Missing mandatory parameter: {e}")
         return
@@ -482,8 +481,8 @@ def create_timelapse(config):
             h, w, _ = img.shape # get first images dimensions
             target_width = target_width or w # give to target width what was in config or what was in first image
             target_height = target_height or h # give to target height what was in config or what was in first image
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v') # use mp4v codec for .mp4 output
-            video_writer = cv2.VideoWriter(output_filename, fourcc, fps, (target_width, target_height))
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v') # use mp4v codec for .mp4 video
+            video_writer = cv2.VideoWriter(video_name_filename, fourcc, fps, (target_width, target_height))
             logger.info(f"Video started: {target_width}x{target_height} @ {fps} FPS")
 
         # crop image if wanted
@@ -507,7 +506,7 @@ def create_timelapse(config):
 
     if video_writer:
         video_writer.release()
-        logger.info(f"Timelapse video created: {output_filename} with {count} frames.")
+        logger.info(f"Timelapse video created: {video_name_filename} with {count} frames.")
     else:
         logger.warning("No video was created because no valid images were found.")
 

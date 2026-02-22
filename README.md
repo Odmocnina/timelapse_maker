@@ -33,9 +33,12 @@ The script reads parameters from a plain text file using a `key=value` structure
 * **`prefix`** = The filename prefix of the images to be processed (e.g., `img_`).
 * **`hours`** = How many hours back from the current time to include images (e.g., `24`).
 * **`duration`** = Frame duration in **milliseconds** (e.g., `100` results in 10 FPS).
-* **`output`** = The desired output filename for the video (e.g., `output.mp4`). Dynamic Naming: If the filename ends with <h> right before the extension (e.g., video<h>.mp4), the script will replace <h> with a current timestamp (e.g., video_2026-02-21-18-05-40.mp4). If prameter video_folder is set, the video will be saved in that folder, otherwise in the same directory as the script.
+* **`video_name`** = The desired output filename for the video (e.g., `output.mp4`). Dynamic Naming: If the filename ends with <h> right before the extension (e.g., video<h>.mp4), the script will replace <h> with a current timestamp (e.g., video_2026-02-21-18-05-40.mp4). If prameter video_folder is set, the video will be saved in that folder, otherwise in the same directory as parameter folder.
 
 ## Optional Parameters
+
+### Video Folder
+* **`video_folder`** = (optional) Directory to save the video. If not specified, the video will be saved in the same directory as photos are (parameter folder). 
 
 ### Dimensions
 * **`width`** = Target video width in pixels.
