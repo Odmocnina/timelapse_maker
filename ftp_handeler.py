@@ -3,6 +3,25 @@ import datetime
 import ftplib
 
 """
+    Helper function to change FTP directory based on the configuration parameter.
+    Returns True if directory was changed successfully or if no path was specified.
+    Returns False if changing directory failed.
+"""
+def change_ftp_directory(ftp, path, logger):
+    # If the parameter is not present (None, empty string), we stay in the root -> return True
+    if not path:
+        return True
+        
+    # Try to get to the folder
+    try:
+        ftp.cwd(path)
+        logger.info(f"Changed FTP directory to: {path}")
+        return True
+    except Exception as e:
+        logger.warning(f"Error: Could not change to FTP directory '{path}': {e}")
+        return False
+
+"""
     Function for downloading new images from FTP, uploading the created video to FTP and cleaning up old images from the 
     directory.
     param: config - dictionary with configuration parameters, expected keys:
@@ -42,6 +61,12 @@ def download_new_from_ftp(config, logger):
     # connect to FTP and download files that are newer than the newest local file
     try:
         with ftplib.FTP(ftp_server, ftp_user, ftp_password) as ftp:
+
+            ftp_path_download = config.get('ftp_path_download')
+            if not change_ftp_directory(ftp, ftp_path_download, logger):
+                logger.warning("FTP Download Error: Could not change to FTP directory.")
+                return
+
             files = ftp.nlst()  # get list of files in the current FTP directory
             downloaded_count = 0
 
@@ -62,6 +87,10 @@ def download_new_from_ftp(config, logger):
                             local_path = os.path.join(image_folder, filename)
                             with open(local_path, 'wb') as f:
                                 ftp.retrbinary(f"RETR {filename}", f.write)
+                            
+                            # set the local file's modification time to match the FTP file's time, so we can compare it correctly in the future
+                            os.utime(local_path, (ftp_time, ftp_time))
+                            
                             downloaded_count += 1
                             logger.info(f"Downloaded: {filename}")
                     except Exception as e:
@@ -79,7 +108,7 @@ def download_new_from_ftp(config, logger):
         - ftp_server (str): FTP server address
         - ftp_user (str): FTP username
         - ftp_password (str): FTP password
-        - output (str): Path to the video file to upload
+        - video_name (str): Name of the video file to upload
 """
 def upload_video_to_ftp(config, logger):
     # control if FTP upload is enabled, if not, skip the whole function
@@ -92,7 +121,7 @@ def upload_video_to_ftp(config, logger):
         ftp_server = config['ftp_server']
         ftp_user = config['ftp_user']
         ftp_password = config['ftp_password']
-        output_filename = config['output']
+        output_filename = config['video_name']
     except KeyError as e:
         logger.warning(f"FTP Upload Error: Missing parameter {e}")
         return
@@ -103,6 +132,12 @@ def upload_video_to_ftp(config, logger):
 
     try: # try to connect to FTP and upload the video file
         with ftplib.FTP(ftp_server, ftp_user, ftp_password) as ftp:
+
+            ftp_path_upload = config.get('ftp_path_upload')
+            if not change_ftp_directory(ftp, ftp_path_upload, logger):
+                logger.warning("FTP Upload Error: Could not change to FTP directory.")
+                return
+
             with open(output_filename, 'rb') as f:
                 # load file in binary mode and upload it using STOR command, the file will be stored with the same name
                 ftp.storbinary(f"STOR {os.path.basename(output_filename)}", f) #  as the local file

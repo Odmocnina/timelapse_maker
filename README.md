@@ -32,6 +32,7 @@ The script reads parameters from a plain text file using a `key=value` structure
 * **`folder`** = Absolute or relative path to the directory containing the images.
 * **`prefix`** = The filename prefix of the images to be processed (e.g., `img_`).
 * **`hours`** = How many hours back from the current time to include images (e.g., `24`).
+* **`days`** = How many days back from the current time to include images (e.g., `7`). Also option is T and Y, which are options for today and yesterday images (if T then imges tkaen from 0 to time of day are prcesed, if Y then images tkaen from time of day to 23:59 are prcesed)
 * **`duration`** = Frame duration in **milliseconds** (e.g., `100` results in 10 FPS).
 * **`video_name`** = The desired output filename for the video (e.g., `output.mp4`). Dynamic Naming: If the filename ends with <h> right before the extension (e.g., video<h>.mp4), the script will replace <h> with a current timestamp (e.g., video_2026-02-21-18-05-40.mp4). If prameter video_folder is set, the video will be saved in that folder, otherwise in the same directory as parameter folder.
 
@@ -64,6 +65,8 @@ Example: logo1=logo/watermark.png;100;100
 * **`ftp_server`** = Address of the FTP server.
 * **`ftp_user`** = FTP username.
 * **`ftp_password`** = FTP password.
+* **`ftp_path_download`** = Path to the directory on the FTP server where the images are located.
+* **`ftp_path_upload`** = Path to the directory on the FTP server where the video should be uploaded.
 
 if want_ftp_load or want_ftp_write, parameters ftp_server, ftp_user, ftp_password are necessery, if they are missing, these functions will not happen.
 
@@ -85,44 +88,58 @@ if want_ftp_load or want_ftp_write, parameters ftp_server, ftp_user, ftp_passwor
 ### Directory cleanup (videos)
 * **`want_video_clean`** = Set to true to automatically delete video files from the output folder that are older than the specified days limit after the process is finished. If missing then taken as false.
 * **`video_folder`** = Directory where video files are stored. This parameter is required if `want_video_clean` is set to true.
-* **`video_prefix`** = Prefix of video files to consider for deletion when `want_video_clean` is set to true. This parameter is required if `want_video_clean` is set to true.
 * **`directory_clean_mp4_days`** = Number of days to keep video files when `want_video_clean` is set to true. Video files older than this number of days will be deleted. This parameter is required if `want_video_clean` is set to true.
+
+### Global config
+* **`glob_config<number>`** = Path to the global config file.
+
+You can have more global configs, just add more glob_config<number> parameters. Global configs are loaded first (in order of how they are written in the config file), then the main config file. Parameters in the main config file overwrite the parameters in the global configs.
+
+### ffmpeg
+* **`want_ffmpeg`** = Set to true to enable ffmpeg.
+* **`ffmpeg_pathname`** = Path to the ffmpeg executable.
+* **`ffmpeg_win_pathname`** = Path to the ffmpeg executable on Windows.
+* **`ffmpeg_quality`** = Quality of the video.
+* **`ffmpeg_speed`** = Speed of the video.
+* **`ffmpeg_rewrite`** = Set to true to rewrite the video.
+* **`ffmpeg_deloriginal`** = Set to true to delete the original video.
+* **`ffmpeg_vf`** = Video filter.
 
 ## Example `config.txt`
 
-folder=kts2
+folder:=kts2
 
-prefix=raw_
+prefix:=raw_
 
-hours=1
+hours:=1
 
-duration=100
+duration:=100
 
-output=output.mp4
+video_name:=output.mp4
 
-want_FTP_load=TRUE
+want_ftp_load:=TRUE
 
-width=1600
+width:=1600
 
-height=1000
+height:=1000
 
-ftp_server=ftp_server_here
+ftp_server:=ftp_server_here
 
-ftp_user="ftp_user_here"
+ftp_user:=ftp_user_here
 
-ftp_password="ftp_password_here"
+ftp_password:=ftp_password_here
 
-want_ftp_write=true
+want_ftp_write:=true
 
-want_directory_clean=true
+want_directory_clean:=true
 
-logo1=logo/logo1.gif;100;100
+logo1:=logo/logo1.gif;100;100
 
-logo2=logo/logo2.png;100;2000
+logo2:=logo/logo2.png;100;2000
 
-logo3=logo/logo3.jpg;1000;1000
+logo3:=logo/logo3.jpg;1000;1000
 
-log_to_file=true
+log_to_file:=true
 
-log_dir=logs
+log_dir:=logs
 

@@ -4,6 +4,7 @@ import argparse
 import datetime
 import numpy as np
 import sys
+import ffmpeg_handeler as ffmpeg
 import ftp_handeler as ftp
 from PIL import Image
 import io
@@ -57,6 +58,99 @@ def get_watermarks(config):
                 logger.warning(f"Warning: Invalid format for '{key}' ('{value}'). Expected 'path;x;y'. Skipping.")
                 
     return watermarks
+
+"""
+    Function to get absolute path from a given path string. If the path is already absolute, it will be returned as is. If it's a relative path, it will
+    be joined with the directory of the currently running script to form an absolute path.
+    param: path_str - the input path string (can be absolute or relative)
+    return: absolute path string
+"""
+def get_absolute_path(path_str):
+    if not path_str:
+        return path_str
+        
+    # get the directory of the currently running script, this will be used to resolve relative paths correctly regardless of the current working directory when the script is run
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # check if the path is already absolute (starts with / or is an absolute path on Windows), if so, return it as is
+    if os.path.isabs(path_str) or path_str.startswith('/'):
+        return os.path.abspath(path_str)
+    else:
+        # if the path is relative, join it with the script directory to get the absolute path, this ensures that all paths are resolved relative to the script location, which is important for consistent behavior when the script is run from different directories
+        joined_path = os.path.join(script_dir, path_str)
+        return os.path.abspath(joined_path)
+
+"""
+    Function to get the time range for processing based on 'days' or 'hours' parameter in config.
+    Supports 'T' (Today) and 'Y' (Yesterday) for days. If days is a number, it will be treated as days back.
+    param: config - dictionary of parameters, expected key:
+        - days (str): number of days back (e.g., "2") or "T" for today or "Y" for yesterday
+        - hours (int): number of hours back (e.g., 24)
+    return: tuple of (start_time, end_time) in datetime objects
+"""
+def get_time_range(config):
+    now = datetime.datetime.now()
+    
+    if 'days' in config:
+        days_val = str(config['days']).strip().upper()
+        
+        if days_val == 'T':
+            # today from 0 to 24
+            midnight_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            return midnight_today, now
+            
+        elif days_val == 'Y':
+            # yesterday from 0 to 24
+            midnight_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            midnight_yesterday = midnight_today - datetime.timedelta(days=1)
+            return midnight_yesterday, midnight_today
+            
+        else:
+            # number of days back to now
+            try:
+                start_time = now - datetime.timedelta(days=float(days_val))
+                return start_time, now
+            except ValueError:
+                if logger:
+                    logger.warning(f"Invalid 'days' value: {days_val}. Trying to use 'hours'.")
+    
+    # if days is not in config or is invalid, try hours
+    if 'hours' in config:
+        start_time = now - datetime.timedelta(hours=float(config['hours']))
+        return start_time, now
+        
+    raise KeyError("Missing 'hours' or 'days' parameter in config")
+    
+"""
+    Function to normalize paths in the configuration dictionary. It checks specific keys that are expected to contain paths (e.g., 'folder', 'video_folder', 'log_dir') and converts their values to absolute paths using the get_absolute_path function. This ensures that all path-related parameters in the config are in a consistent absolute format, which helps avoid issues with relative paths when the script is run from different locations.
+    param: config - dictionary of parameters loaded from config file
+    return: config with normalized absolute paths for specified keys
+"""
+def normalize_config_paths(config):
+    # path keys that we want to normalize, you can add more keys here if your config has other path parameters that need to be normalized
+    path_keys = ['folder', 'video_folder', 'log_dir', 'ffmpeg_win_pathname', 'ffmpeg_pathname']
+    
+    for key, value in config.items():
+        # normalize paths for specific keys that are expected to contain paths, this will convert relative paths to absolute paths based on the script location, ensuring consistent behavior regardless of the current working directory when the script is run
+        if key in path_keys:
+            config[key] = get_absolute_path(value)
+            
+        # normalize paths for logo items, since they can also contain paths that need to be resolved, we check if the key starts with 'logo' and then we split the value by ';' to get the path part, normalize it, and then join it back together, this allows us to handle multiple logo items in the config that may have different paths that need to be normalized
+        elif key.startswith('logo'):
+            parts = value.split(';')
+            if len(parts) > 0:
+                # take the first part of the logo value, which is expected to be the path, and normalize it, this ensures that all logo paths are also converted to absolute paths, which is important for correctly loading the watermark images regardless of where the script is run from
+                normalized_logo_path = get_absolute_path(parts[0].strip())
+                # replace the original path with the normalized one
+                parts[0] = normalized_logo_path
+                # join the parts back into a string (path;x;y) and save it back to the config
+                config[key] = ';'.join(parts)
+
+        elif key.startswith("glob_config"):
+            config[key] = get_absolute_path(value)
+
+            
+    return config
 
 """
     Function for setting up the outfile, if the video_name in config ends with <h>, it will be replaced with a timestamp, otherwise it will be used as is.
@@ -164,7 +258,7 @@ def apply_watermark(base_img, watermark_img, x, y):
         - want_video_clean (str): "true" if video cleanup is enabled, otherwise "false"
         - video_folder (str): Directory where videos are stored
         - video_prefix (str): Prefix of video files to consider for deletion
-        - directory_clean_mp4_days (float): Age in days; video files older than this will be deleted
+        - directory_clean_mp4_hours (float): Age in hours; video files older than this will be deleted
 """
 def clear_video_dir(config):
     if str(config.get('want_video_clean', 'false')).lower() != 'true':
@@ -174,12 +268,12 @@ def clear_video_dir(config):
     logger.info("--- Starting Video Cleanup ---")
     try:
         video_folder = config['video_folder']
-        hours_back = float(config['directory_clean_mp4_days'])
+        hours_back = float(config['directory_clean_mp4_hours'])
     except KeyError as e:
         logger.warning(f"Cleanup Error: Missing parameter {e}")
         return
 
-    time_threshold = datetime.datetime.now() - datetime.timedelta(days=hours_back)
+    time_threshold = datetime.datetime.now() - datetime.timedelta(hours=hours_back)
     threshold_timestamp = time_threshold.timestamp()
     deleted_count = 0
 
@@ -314,20 +408,20 @@ def crop_image_height(image, y, cy):
 """
     Function to clean up old images from the specified directory based on the configuration.
     param: config - dictionary of parameters, expected keys:
-        - wantDirectoryClean (str): "true" if cleanup is enabled, otherwise "false"
+        - want_image_clean (str): "true" if cleanup is enabled, otherwise "false"
         - folder (str): Directory to clean
         - prefix (str): Prefix of image files to consider for deletion
-        - hours (float): Age in hours; files older than this will be deleted
+        - image_clean_hours (float): Age in hours; files older than this will be deleted
 """
 def clean_directory(config):
-    if str(config.get('want_directory_clean', 'false')).lower() != 'true': # control if cleanup is enabled
+    if str(config.get('want_image_clean', 'false')).lower() != 'true': # control if cleanup is enabled
         logger.info("Directory cleanup is disabled in config. Skipping cleanup.")
         return
 
     logger.info("--- Starting Directory Cleanup ---")
     try: # check for mandatory parameters
         image_folder = config['folder']
-        hours_back = float(config['hours'])
+        hours_back = float(config['image_clean_hours'])
         file_prefix = config['prefix']
     except KeyError as e:
         logger.warning(f"Cleanup Error: Missing parameter {e}")
@@ -368,16 +462,34 @@ def load_config(config_path):
 
     with open(config_path, 'r', encoding='utf-8') as f:
         for line in f:
+            print("Line: ", line)
             line = line.strip()
             # Skip empty lines or comments
             if not line or line.startswith('#'):
                 continue
 
             if '=' in line:
-                key, value = line.split('=', 1)
+                key, value = line.split(':=', 1)
                 params[key.strip().lower()] = value.strip()
 
+    # if os is windows, use the windows ffmpeg path
+    if os.name == 'nt':
+        try:
+            params['ffmpeg_pathname'] = params['ffmpeg_win_pathname']
+        except KeyError:
+            pass
+
+    print("Loaded config: ", config_path)
     return params
+
+"""
+    Function to print configuration to log.
+    param: config - dictionary of parameters
+"""
+def print_config(config):
+    for key, value in config.items():
+        if key != "ftp_password":
+            logger.debug(f"Parameter '{key}': {value}")
 
 """
     Helper function to safely read an image (handling paths with special/non-ASCII characters).
@@ -434,7 +546,7 @@ def create_timelapse(config):
     try:
         image_folder = config['folder']
         file_prefix = config['prefix']
-        hours_back = float(config['hours'])
+        start_time, end_time = get_time_range(config) # get start and end time
         frame_duration = float(config['duration'])
         video_name_filename = get_video_name_filename(config['video_name'])
     except KeyError as e:
@@ -444,16 +556,17 @@ def create_timelapse(config):
     target_width = int(config.get('width')) if config.get('width') else None
     target_height = int(config.get('height')) if config.get('height') else None
 
-    # get all files with prefix and within time range (in memory only string, not images)
-    time_threshold = datetime.datetime.now() - datetime.timedelta(hours=hours_back)
-
-    logger.info(f"Scanning {image_folder} for images with prefix '{file_prefix}' from the last {hours_back} hours.")
+    logger.info(f"Scanning {image_folder} for images with prefix '{file_prefix}' from {start_time} to {end_time}.")
     all_files = []
+    
     for filename in os.listdir(image_folder):
         if filename.startswith(file_prefix) and filename.lower().endswith(('.png', '.jpg', '.jpeg')):
             path = os.path.join(image_folder, filename)
             mtime = os.path.getmtime(path)
-            if datetime.datetime.fromtimestamp(mtime) >= time_threshold:
+            file_dt = datetime.datetime.fromtimestamp(mtime)
+            
+            # check if image is within the time range (from start_time to end_time)
+            if start_time <= file_dt <= end_time:
                 all_files.append((path, mtime))
 
     if not all_files:
@@ -570,7 +683,25 @@ def get_time_of_log_file(log_file):
     except Exception as e:
         logger.warning(f"Could not extract timestamp from log file name '{log_file}': {e}")
         return None
+
+"""
+    Function that handles global configs by loading them and updating the main config with them.
+    param: config - dictionary of parameters, expected keys:
+        - global_config (str): Path to the global config file
+    param: original_config_path - path to the original config file
+    return: updated config dictionary
+"""
+def handle_global_configs(config, original_config_path):
+    for key, value in list(config.items()):
+        if 'glob_config' in key:
+            print(f"Loading global config: {value}")
+            global_config = load_config(value)
+            config.update(global_config)
+
+    original_config = load_config(original_config_path)
+    config.update(original_config)
     
+    return config
 
 """
     Function for cleaning up old logs from the specified log directory based on the configuration.
@@ -632,12 +763,22 @@ if __name__ == "__main__":
     parser.add_argument("config_file", help="Path to the configuration file (e.g., config.txt)")
     args = parser.parse_args()
     config_data = load_config(args.config_file)
+    config_data = normalize_config_paths(config_data)
+
+    # handle global configs
+    config_data = handle_global_configs(config_data, args.config_file)
+    config_data = normalize_config_paths(config_data)
+
     logger = set_up_logging(config_data, args.config_file)
     config_data = set_up_outfile(config_data)
+    print_config(config_data)
 
     # download new stuff (if enebled in config) and create vid
     ftp.download_new_from_ftp(config_data, logger)
     create_timelapse(config_data)
+
+    # process the created video with FFmpeg if enabled in config
+    ffmpeg.compress_video_with_ffmpeg(config_data, logger)
 
     # upload video to FTP if enabled in config
     ftp.upload_video_to_ftp(config_data, logger)
